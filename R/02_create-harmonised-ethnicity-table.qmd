@@ -1,0 +1,65 @@
+---
+title: "Harmonising Ethnicity (NI)"
+author: "Dave"
+format: html
+editor: visual
+---
+
+## Housekeeping
+
+### Libraries
+
+```{r libs}
+library(fs)
+library(here)
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(vroom)
+```
+
+### Load data
+
+```{r loadData}
+ethnicity <- readRDS(here("census-data_republic-of-ireland",
+                          "republic-of-ireland_ethnicity_sa_2016.RDS"))
+```
+
+## Harmonise
+
+```{r harmonise}
+ethnicity <- pivot_longer(ethnicity, -sa_2015_code,
+                          names_to = "ethnicity", values_to = "n")
+
+ethnicity <-
+  mutate(ethnicity,
+         ethnicity = case_when(
+           
+           str_starts(ethnicity, "white_")     ~ "white",
+           ethnicity == "other_white"          ~ "white",
+           
+           ethnicity == "black_or_black_irish" ~ "african_caribbean_black",
+           
+           ethnicity == "asian_or_asian_irish" ~ "asian",
+           TRUE                                ~ ethnicity
+         )) |> 
+  filter(ethnicity != "not_stated")
+
+ethnicity <- group_by(ethnicity, sa_2015_code, ethnicity)
+
+ethnicity <- count(ethnicity, wt = n)
+
+ethnicity <- pivot_wider(ethnicity, values_from = n, names_from = ethnicity)
+```
+
+## Save harmonised data
+
+```{r saveData}
+saveRDS(ethnicity,
+        here("census-data_republic-of-ireland",
+             "republic-of-ireland_ethnicity-harmonised_sa_2016.RDS"))
+
+vroom_write(ethnicity, 
+            here("census-data_republic-of-ireland",
+                 "republic-of-ireland_ethnicity-harmonised_sa_2016.csv"))
+```
