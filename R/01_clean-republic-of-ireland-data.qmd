@@ -31,23 +31,6 @@ library(jsonlite)
 
 ## Reading Data
 
-### Helpers
-
-```{r readCensusData}
-read_census_data <- function(url){
-  result <- GET(url)
-  
-  content <- result
-  
-  json_result <- 
-    result |> 
-    rawToChar() |> 
-    parse_json()
-  
-  table <- vroom(I(json_result[["result"]]))
-}
-```
-
 ### Census data
 
 ```{r readingData}
