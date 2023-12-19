@@ -203,7 +203,7 @@ extract_table <- function(names_tibble){
   
   # note that order of col_names determines column order in out_table
   out_table <- select(census, GEOGID, all_of(col_names))
-  names(out_table) <- c("sa_2015_code", col_descs)
+  names(out_table) <- c("sa_2022_code", col_descs)
   
   out_table <- clean_names(out_table)
   
