@@ -34,7 +34,7 @@ library(jsonlite)
 ### Census data
 
 ```{r readingData}
-census <- vroom(here("SAPS2016_SA2017.csv"))
+census <- vroom(here("2022_small-area-statistics.csv"))
 ```
 
 ### Data dictionary
@@ -42,7 +42,7 @@ census <- vroom(here("SAPS2016_SA2017.csv"))
 #### Read in dictionary
 
 ```{r dataDictionary}
-dictionary <- read_xlsx(here("SAPS_2016_Glossary.xlsx"))
+dictionary <- read_xlsx(here("Glossary_Saps_2022_270923.xlsx"))
 ```
 
 #### Format dictionary
@@ -245,7 +245,7 @@ general_health <- rename_with(general_health,
 dir_create(here("census-data_republic-of-ireland"))
 
 census_save <- function(x, stat_name){
-  file_name <- str_c("republic-of-ireland", stat_name, "sa", "2016", sep = "_")
+  file_name <- str_c("republic-of-ireland", stat_name, "sa", "2022", sep = "_")
   
   rds_name <- str_c(file_name, ".RDS")
   csv_name <- str_c(file_name, ".csv")
