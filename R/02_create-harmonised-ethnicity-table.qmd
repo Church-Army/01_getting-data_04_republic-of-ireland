@@ -22,13 +22,13 @@ library(vroom)
 
 ```{r loadData}
 ethnicity <- readRDS(here("census-data_republic-of-ireland",
-                          "republic-of-ireland_ethnicity_sa_2016.RDS"))
+                          "republic-of-ireland_ethnicity_sa_2022.RDS"))
 ```
 
 ## Harmonise
 
 ```{r harmonise}
-ethnicity <- pivot_longer(ethnicity, -sa_2015_code,
+ethnicity <- pivot_longer(ethnicity, -sa_2022_code,
                           names_to = "ethnicity", values_to = "n")
 
 ethnicity <-
@@ -45,7 +45,7 @@ ethnicity <-
          )) |> 
   filter(ethnicity != "not_stated")
 
-ethnicity <- group_by(ethnicity, sa_2015_code, ethnicity)
+ethnicity <- group_by(ethnicity, sa_2022_code, ethnicity)
 
 ethnicity <- count(ethnicity, wt = n)
 
@@ -57,9 +57,9 @@ ethnicity <- pivot_wider(ethnicity, values_from = n, names_from = ethnicity)
 ```{r saveData}
 saveRDS(ethnicity,
         here("census-data_republic-of-ireland",
-             "republic-of-ireland_ethnicity-harmonised_sa_2016.RDS"))
+             "republic-of-ireland_ethnicity-harmonised_sa_2022.RDS"))
 
 vroom_write(ethnicity, 
             here("census-data_republic-of-ireland",
-                 "republic-of-ireland_ethnicity-harmonised_sa_2016.csv"))
+                 "republic-of-ireland_ethnicity-harmonised_sa_2022.csv"))
 ```

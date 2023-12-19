@@ -1,0 +1,264 @@
+---
+title: "Clean Republic of Ireland Census Data"
+author: "Dave"
+format: html
+editor: visual
+execute:
+  output: false
+---
+
+## Introduction
+
+We're getting the required census data from the republic of ireland. The data is all stored on one massive CSV, so we're going to do some pivoting and maybe cross reference a data dicitonary? There are lots of codes.
+
+## Housekeeping
+
+### Libraries
+
+```{r libs}
+library(here)
+library(fs)
+library(dplyr)
+library(tidyr)
+library(vroom)
+library(readxl)
+library(janitor)
+library(readr)
+library(stringr)
+library(httr)
+library(jsonlite)
+```
+
+## Reading Data
+
+### Census data
+
+```{r readingData}
+census <- vroom(here("2022_small-area-statistics.csv"))
+```
+
+### Data dictionary
+
+#### Read in dictionary
+
+```{r dataDictionary}
+dictionary <- read_xlsx(here("Glossary_Saps_2022_270923.xlsx"))
+```
+
+#### Format dictionary
+
+We'll show a bit of output here so it's clearer what's going on. This is funky data that requires imaginative formatting
+
+```{r formatDictionary}
+#| output: true
+
+dictionary <- clean_names(dictionary)
+
+dictionary <- fill(dictionary, themes)
+
+## This is bad data (for our purposes)
+head(dictionary)
+
+dictionary <-
+  mutate(dictionary,
+         table_group =
+           cumsum(!is.na(tables_within_themes) & is.na(lag(tables_within_themes)))
+         ) |> 
+  relocate(table_group, .after = tables_within_themes)
+
+dictionary <- group_by(dictionary, themes, table_group)
+
+dictionary <- mutate(dictionary,
+                     table_num = parse_number(tables_within_themes[1]),
+                     table_desc = tables_within_themes[2])
+
+dictionary |> 
+  group_by(themes, table_num, table_desc) |> 
+  arrange(parse_number(themes), table_num) |> 
+  summarise() |> 
+  head()
+
+dictionary <- ungroup(dictionary)
+
+dictionary <- select(dictionary,
+                     theme_desc = themes,
+                     table_num, 
+                     table_desc,
+                     column_name = column_names,
+                     field_desc = description_of_field)
+
+dictionary <-
+  mutate(dictionary, theme_num = parse_number(theme_desc)) |> 
+  relocate(theme_num, theme_desc)
+
+head(dictionary)
+```
+
+### Get desired column names
+
+#### Summary of themes and tables
+
+```{r tablesThemesSummary}
+#| output: true
+table_summary <- 
+  dictionary |> 
+  group_by(theme_num, theme_desc, table_num, table_desc) |> 
+  summarise()
+
+head(table_summary)
+```
+
+#### Get age column names
+
+```{r getDesiredColumnNames}
+#| output: true
+
+## Age
+dictionary |> 
+  filter(theme_num == 1) |> 
+  group_by(theme_desc, table_num, table_desc) |> 
+  summarise()
+
+dictionary |> 
+  filter(theme_num == 1, table_num == 1) |> 
+  head()
+
+age_names <- 
+  dictionary |>
+  filter(theme_num == 1, table_num == 1,
+         str_ends(column_name, "T"),
+         column_name != "T1_1AGETT") |> # drop total persons
+  select(column_name, field_desc)
+
+head(age_names)
+
+```
+
+#### Get ethnicity column names
+
+```{r getEthnicityColumnNames}
+#| output: true
+
+ethnicity_names <-
+  dictionary |>
+  filter(theme_num == 2, table_num == 2,
+         str_ends(column_name, "_2T", negate = TRUE)) |> # drop 'total' row
+  select(column_name, field_desc)
+
+```
+
+#### Get religion column names
+
+Absolutely wild, the options are 'Catholic, Other religion, no religion and Not stated'.
+
+```{r getReligionColNames}
+religion_names <-
+  dictionary |> 
+    filter(theme_num == 2, table_num == 4,
+           str_ends(column_name, "_4T", negate = TRUE)) |> # drop total col
+    select(column_name, field_desc)
+```
+
+#### Get household composition column names
+
+Note that 'private households' includes social housing - it only excludes those living in communal establishments (e.g. nursing homes, monasteries, student halls etc.) Such establishments are accounted for in table 1 of theme 7 (the only table of that theme).
+
+```{r householdCompositionColumnNames}
+household_composition_names <-
+  dictionary |> 
+    filter(theme_num == 5, table_num == 1,
+           str_ends(column_name, "_P", negate = TRUE), # drop person counts 
+           column_name != "T5_1T_H") |>                # drop total households
+    select(field_desc, column_name)
+```
+
+#### Get general health names
+
+```{r getGeneralHealthColumnNames}
+general_health_names <-
+  dictionary |>
+    filter(theme_num == 12, table_num == 3,
+           str_ends(column_name, "T"),
+           column_name != "T12_3_TT") |> # drop total persons 
+    select(column_name, field_desc)
+```
+
+## Cleaning Data
+
+### Drop surplus columns
+
+```{r dropSurplusCols}
+census <- select(census, -GUID, -GEOGDESC)
+```
+
+### Make selector
+
+Take the name/description tables we've made from the dictionary, and use them to select and rename, outputting another tibble
+
+```{r makeSelector}
+extract_table <- function(names_tibble){
+  
+  col_names <- names_tibble[["column_name"]]
+  col_descs <- names_tibble[["field_desc"]]
+  
+  # note that order of col_names determines column order in out_table
+  out_table <- select(census, GEOGID, all_of(col_names))
+  names(out_table) <- c("sa_2022_code", col_descs)
+  
+  out_table <- clean_names(out_table)
+  
+  return(out_table)
+}
+```
+
+### Extract tables
+
+```{r extractTables}
+age                   <- extract_table(age_names)
+ethnicity             <- extract_table(ethnicity_names)
+religion              <- extract_table(religion_names)
+household_composition <- extract_table(household_composition_names)
+general_health        <- extract_table(general_health_names)
+```
+
+## Rename columns
+
+```{r renameColumns}
+age <- rename_with(age, str_remove, everything(), "_total")
+age <- rename_with(age, str_c, matches(".+_\\d+$"), "_years")
+age <- rename(age, age_85_years_and_over = "age_85_and_over")
+
+household_composition <- rename_with(household_composition,
+                                     str_remove,
+                                     everything(),
+                                     "_households_no_of_households$")
+
+general_health <- rename_with(general_health,
+                              str_remove,
+                              everything(),
+                              "_total$")
+```
+
+## Save data
+
+```{r saveData}
+dir_create(here("census-data_republic-of-ireland"))
+
+census_save <- function(x, stat_name){
+  file_name <- str_c("republic-of-ireland", stat_name, "sa", "2022", sep = "_")
+  
+  rds_name <- str_c(file_name, ".RDS")
+  csv_name <- str_c(file_name, ".csv")
+  
+  in_outputs <- function(...) here("census-data_republic-of-ireland", ...)
+  
+  saveRDS(x, in_outputs(rds_name))
+  vroom_write(x, in_outputs(csv_name), delim = ",")
+}
+
+census_save(age, "age")
+census_save(ethnicity, "ethnicity")
+census_save(religion, "religion")
+census_save(household_composition, "household-composition")
+census_save(general_health, "general-health")
+```
