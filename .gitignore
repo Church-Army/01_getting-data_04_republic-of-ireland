@@ -7,5 +7,7 @@
 *.xlsx
 .Rproj.user
 *.html
-R/*_files
-R/*_cache
+
+R/*_files/
+R/*_cache/
+
